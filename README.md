@@ -1,2 +1,2 @@
 # go-nameko
-A Goalng client of nameko
+A Golang client of nameko
