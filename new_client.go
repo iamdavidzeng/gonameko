@@ -20,7 +20,7 @@ type RPCClient struct {
 	RabbitPass  string
 	RabbitPort  int64
 	contentType string
-	param       RPCParam
+	param       RPCPayload
 
 	conn    amqp.Connection
 	channel amqp.Channel
@@ -28,9 +28,14 @@ type RPCClient struct {
 	msgs    <-chan amqp.Delivery
 }
 
-type RPCParam struct {
+type RPCPayload struct {
 	Args   []string          `json:"args"`
 	Kwargs map[string]string `json:"kwargs"`
+}
+
+type ServiceBase struct {
+	service, function string
+	param             RPCPayload
 }
 
 func (e *RPCError) Error() RPCError {
@@ -94,18 +99,18 @@ func (r *RPCClient) init() {
 	r.msgs = msgs
 }
 
-func (r *RPCClient) publish(p RPCParam) (map[string]interface{}, error) {
+func (r *RPCClient) publish(s ServiceBase) (map[string]interface{}, error) {
 	response := map[string]interface{}{}
 
 	go func() {
 		corrID := uuid.NewV4().String()
-		param, _ := json.Marshal(p)
+		param, _ := json.Marshal(s.param)
 
 		err := r.channel.Publish(
-			"nameko-rpc",            // exchange
-			"payments.health_check", // routing key
-			false,                   // mandatory
-			false,                   // immediate
+			"nameko-rpc", // exchange
+			fmt.Sprintf("%v.%v", s.service, s.function), // routing key
+			false, // mandatory
+			false, // immediate
 			amqp.Publishing{
 				ContentType:   r.contentType,
 				CorrelationId: corrID,
@@ -115,12 +120,15 @@ func (r *RPCClient) publish(p RPCParam) (map[string]interface{}, error) {
 		failOnError(err, "Failed to publish a message")
 	}()
 
-	for d := range r.msgs {
-		json.Unmarshal(d.Body, &response)
-		break
-	}
+	d := <-r.msgs
+	json.Unmarshal(d.Body, &response)
 
 	return response, nil
+}
+
+func (r *RPCClient) request(s ServiceBase) (interface{}, error) {
+	response, err := r.publish(s)
+	return response, err
 }
 
 func failOnError(err error, msg string) {
@@ -140,8 +148,15 @@ func main() {
 
 	rpc.init()
 
-	res, _ := rpc.publish(RPCParam{Args: []string{}, Kwargs: map[string]string{}})
-	rString, _ := json.Marshal(res)
-	fmt.Println(string(rString))
+	response, _ := rpc.request(ServiceBase{
+		service:  "payments",
+		function: "health_check",
+		param: RPCPayload{
+			Args:   []string{},
+			Kwargs: map[string]string{},
+		},
+	})
+
+	fmt.Println(response)
 
 }
