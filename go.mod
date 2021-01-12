@@ -1,4 +1,4 @@
-module gonamekoclient
+module github.com/iamdavidzeng/gonamekoclient
 
 go 1.13
 
