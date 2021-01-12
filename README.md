@@ -3,7 +3,7 @@ A Golang client of nameko
 
 # Tutorial
 ```
-go get github.com/iamdavidzeng/gonamekoclient
+go get -u github.com/iamdavidzeng/gonamekoclient
 ```
 
 ## Usage
