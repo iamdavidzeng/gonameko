@@ -143,7 +143,7 @@ func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
 	if d.CorrelationId == correlationID {
 		json.Unmarshal(d.Body, response)
 
-		fmt.Println(response)
+		log.Println(response)
 
 		if response.Err != nil {
 			return nil, &RPCError{response.Err["exc_path"], response.Err["exc_args"], response.Err["exc_type"], response.Err["value"]}
