@@ -14,13 +14,13 @@ type RPCError struct {
 	Value string
 }
 
-type RPCClient struct {
-	RabbitURL   string
-	RabbitUser  string
-	RabbitPass  string
-	RabbitPort  int64
-	contentType string
-	param       RPCPayload
+type Client struct {
+	RabbitHostname string
+	RabbitUser     string
+	RabbitPass     string
+	RabbitPort     int64
+	contentType    string
+	param          RPCPayload
 
 	conn    amqp.Connection
 	channel amqp.Channel
@@ -33,9 +33,9 @@ type RPCPayload struct {
 	Kwargs map[string]string `json:"kwargs"`
 }
 
-type ServiceBase struct {
-	service, function string
-	param             RPCPayload
+type RPCRequestParam struct {
+	Service, Function string
+	Payload           RPCPayload
 }
 
 func (e *RPCError) Error() RPCError {
@@ -45,8 +45,8 @@ func (e *RPCError) Error() RPCError {
 	}
 }
 
-func (r *RPCClient) init() {
-	url := fmt.Sprintf("amqp://%v:%v@%v:%v/", r.RabbitUser, r.RabbitPass, r.RabbitURL, r.RabbitPort)
+func (r *Client) init() {
+	url := fmt.Sprintf("amqp://%v:%v@%v:%v/", r.RabbitUser, r.RabbitPass, r.RabbitHostname, r.RabbitPort)
 	conn, err := amqp.Dial(url)
 	failOnError(err, "Failed to connect to RabbitMQ")
 	r.conn = *conn
@@ -99,21 +99,21 @@ func (r *RPCClient) init() {
 	r.msgs = msgs
 }
 
-func (r *RPCClient) publish(s ServiceBase) (map[string]interface{}, error) {
+func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
 	response := map[string]interface{}{}
+	correlationID := uuid.NewV4().String()
 
 	go func() {
-		corrID := uuid.NewV4().String()
-		param, _ := json.Marshal(s.param)
+		param, _ := json.Marshal(p.Payload)
 
 		err := r.channel.Publish(
 			"nameko-rpc", // exchange
-			fmt.Sprintf("%v.%v", s.service, s.function), // routing key
+			fmt.Sprintf("%v.%v", p.Service, p.Function), // routing key
 			false, // mandatory
 			false, // immediate
 			amqp.Publishing{
 				ContentType:   r.contentType,
-				CorrelationId: corrID,
+				CorrelationId: correlationID,
 				ReplyTo:       r.queue.Name,
 				Body:          []byte(string(param)),
 			})
@@ -121,13 +121,16 @@ func (r *RPCClient) publish(s ServiceBase) (map[string]interface{}, error) {
 	}()
 
 	d := <-r.msgs
-	json.Unmarshal(d.Body, &response)
+	if d.CorrelationId == correlationID {
+		json.Unmarshal(d.Body, &response)
 
-	return response, nil
+		return response, nil
+	}
+	return nil, nil
 }
 
-func (r *RPCClient) request(s ServiceBase) (interface{}, error) {
-	response, err := r.publish(s)
+func (r *Client) request(p RPCRequestParam) (interface{}, error) {
+	response, err := r.publish(p)
 	return response, err
 }
 
@@ -138,20 +141,20 @@ func failOnError(err error, msg string) {
 }
 
 func main() {
-	rpc := RPCClient{
-		RabbitURL:   "localhost",
-		RabbitUser:  "guest",
-		RabbitPass:  "guest",
-		RabbitPort:  5672,
-		contentType: "application/json",
+	namekorpc := Client{
+		RabbitHostname: "localhost",
+		RabbitUser:     "guest",
+		RabbitPass:     "guest",
+		RabbitPort:     5672,
+		contentType:    "application/json",
 	}
 
-	rpc.init()
+	namekorpc.init()
 
-	response, _ := rpc.request(ServiceBase{
-		service:  "payments",
-		function: "health_check",
-		param: RPCPayload{
+	response, _ := namekorpc.request(RPCRequestParam{
+		Service:  "articles",
+		Function: "health_check",
+		Payload: RPCPayload{
 			Args:   []string{},
 			Kwargs: map[string]string{},
 		},
