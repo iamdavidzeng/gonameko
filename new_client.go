@@ -28,7 +28,7 @@ type Client struct {
 	RabbitUser     string
 	RabbitPass     string
 	RabbitPort     int64
-	contentType    string
+	ContentType    string
 	param          RPCPayload
 
 	conn    amqp.Connection
@@ -131,7 +131,7 @@ func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
 			false, // mandatory
 			false, // immediate
 			amqp.Publishing{
-				ContentType:   r.contentType,
+				ContentType:   r.ContentType,
 				CorrelationId: correlationID,
 				ReplyTo:       r.queue.Name,
 				Body:          []byte(string(param)),
