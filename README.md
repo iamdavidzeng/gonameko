@@ -1,12 +1,11 @@
-# go-nameko
+# gonamekoclient
 A Golang client of nameko
 
-# Tutorial
+## Usage
 ```
 go get -u github.com/iamdavidzeng/gonamekoclient
 ```
 
-## Usage
 ```
 package main
 
