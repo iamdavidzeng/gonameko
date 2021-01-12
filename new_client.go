@@ -1,4 +1,4 @@
-package main
+package gonamekoclient
 
 import (
 	"encoding/json"
@@ -9,11 +9,20 @@ import (
 	"github.com/streadway/amqp"
 )
 
+// RPCError capture exception from nameko servic
 type RPCError struct {
-	Type  string
-	Value string
+	ExcArgs string `json:"exc_args"`
+	ExcPath string `json:"exc_path"`
+	ExcType string `json:"exc_type"`
+	Value   string `json:"value"`
 }
 
+// Error represent gonamekoclient customize error
+type Error struct {
+	Type, Value string
+}
+
+// Client use to initiate a go nameko client
 type Client struct {
 	RabbitHostname string
 	RabbitUser     string
@@ -28,24 +37,34 @@ type Client struct {
 	msgs    <-chan amqp.Delivery
 }
 
+// RPCPayload define arguments accept by nameko service
 type RPCPayload struct {
 	Args   []string          `json:"args"`
 	Kwargs map[string]string `json:"kwargs"`
 }
 
+// RPCRequestParam define nameko service and function, arguments
 type RPCRequestParam struct {
 	Service, Function string
 	Payload           RPCPayload
 }
 
-func (e *RPCError) Error() RPCError {
-	return RPCError{
-		e.Type,
-		e.Value,
-	}
+// RPCResponse Use to parse resposne from nameko service
+type RPCResponse struct {
+	Result map[string]interface{} `json:"result"`
+	Err    map[string]string      `json:"error"`
 }
 
-func (r *Client) init() {
+func (e *RPCError) Error() string {
+	return fmt.Sprintf("%v: %v", e.ExcType, e.Value)
+}
+
+func (e *Error) Error() string {
+	return fmt.Sprintf("%v: %v", e.Type, e.Value)
+}
+
+// Init connected to RabbitMQ and initiate go nameko client
+func (r *Client) Init() {
 	url := fmt.Sprintf("amqp://%v:%v@%v:%v/", r.RabbitUser, r.RabbitPass, r.RabbitHostname, r.RabbitPort)
 	conn, err := amqp.Dial(url)
 	failOnError(err, "Failed to connect to RabbitMQ")
@@ -100,7 +119,7 @@ func (r *Client) init() {
 }
 
 func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
-	response := map[string]interface{}{}
+	response := &RPCResponse{}
 	correlationID := uuid.NewV4().String()
 
 	go func() {
@@ -122,14 +141,21 @@ func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
 
 	d := <-r.msgs
 	if d.CorrelationId == correlationID {
-		json.Unmarshal(d.Body, &response)
+		json.Unmarshal(d.Body, response)
 
-		return response, nil
+		fmt.Println(response)
+
+		if response.Err != nil {
+			return nil, &RPCError{response.Err["exc_path"], response.Err["exc_args"], response.Err["exc_type"], response.Err["value"]}
+		}
+
+		return response.Result, nil
 	}
-	return nil, nil
+	return nil, &Error{"INVALID_CORRELATION_ID", "invalid correlation id"}
 }
 
-func (r *Client) request(p RPCRequestParam) (interface{}, error) {
+// Call publish a message to nameko service and return corresponding response
+func (r *Client) Call(p RPCRequestParam) (interface{}, error) {
 	response, err := r.publish(p)
 	return response, err
 }
@@ -138,28 +164,4 @@ func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
 	}
-}
-
-func main() {
-	namekorpc := Client{
-		RabbitHostname: "localhost",
-		RabbitUser:     "guest",
-		RabbitPass:     "guest",
-		RabbitPort:     5672,
-		contentType:    "application/json",
-	}
-
-	namekorpc.init()
-
-	response, _ := namekorpc.request(RPCRequestParam{
-		Service:  "articles",
-		Function: "health_check",
-		Payload: RPCPayload{
-			Args:   []string{},
-			Kwargs: map[string]string{},
-		},
-	})
-
-	fmt.Println(response)
-
 }
