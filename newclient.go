@@ -9,7 +9,7 @@ import (
 	"github.com/streadway/amqp"
 )
 
-// RPCError capture exception from nameko servic
+// RPCError capture exception from nameko service
 type RPCError struct {
 	ExcArgs string `json:"exc_args"`
 	ExcPath string `json:"exc_path"`
