@@ -1,4 +1,4 @@
-package main
+package gonameko
 
 import (
 	"encoding/json"
@@ -19,12 +19,6 @@ type Server struct {
 	conn    *amqp.Connection
 	channel *amqp.Channel
 	queue   *amqp.Queue
-	msgs    <-chan amqp.Delivery
-}
-
-type RPCResponse struct {
-	Result interface{}       `json:"result"`
-	Err    map[string]string `json:"error"`
 }
 
 func (s *Server) Run() {
@@ -116,23 +110,4 @@ func (s *Server) Run() {
 
 	log.Printf(" [*] Server is waiting...")
 	<-forever
-}
-
-func FailOnError(err error, msg string) {
-	if err != nil {
-		log.Fatalf("%s: %s", msg, err)
-	}
-}
-
-func main() {
-	server := Server{
-		Name:           "gonameko",
-		RabbitHostname: "localhost",
-		RabbitUser:     "guest",
-		RabbitPass:     "guest",
-		RabbitPort:     5672,
-		ContentType:    "application/json",
-	}
-
-	server.Run()
 }

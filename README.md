@@ -1,22 +1,23 @@
-# gonamekoclient
-A Golang client of nameko
+# gonameko
+A Golang implementation of Nameko
 
 ## Usage
 ```
-go get -u github.com/iamdavidzeng/gonamekoclient
+go get -u github.com/iamdavidzeng/gonameko
 ```
 
+client pattern
 ```
 package main
 
 import (
 	"fmt"
 
-	"github.com/iamdavidzeng/gonamekoclient"
+	"github.com/iamdavidzeng/gonameko"
 )
 
 func main() {
-	namekorpc := gonamekoclient.Client{
+	client := gonameko.Client{
 		RabbitHostname: "localhost",
 		RabbitUser:     "guest",
 		RabbitPass:     "guest",
@@ -24,13 +25,13 @@ func main() {
 		ContentType:    "application/json",
 	}
 
-	namekorpc.Init()
+	client.Init()
 
-	response, err := namekorpc.Call(
-		gonamekoclient.RPCRequestParam{
+	response, err := client.Call(
+		gonameko.RPCRequestParam{
 			Service:  "articles",
 			Function: "health_check",
-			Payload: gonamekoclient.RPCPayload{
+			Payload: gonameko.RPCPayload{
 				Args:   []string{},
 				Kwargs: map[string]string{},
 			},
@@ -41,5 +42,25 @@ func main() {
 	} else {
 		fmt.Println(response)
 	}
+}
+```
+
+server pattern
+```
+package main
+
+import "github.com/iamdavidzeng/gonameko"
+
+func main() {
+	server := gonameko.Server{
+		Name:           "gonameko",
+		RabbitHostname: "localhost",
+		RabbitUser:     "guest",
+		RabbitPass:     "guest",
+		RabbitPort:     5672,
+		ContentType:    "application/json",
+	}
+
+	server.Run()
 }
 ```

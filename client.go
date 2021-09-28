@@ -1,4 +1,4 @@
-package main
+package gonameko
 
 import (
 	"encoding/json"
@@ -50,8 +50,8 @@ type RPCRequestParam struct {
 
 // RPCResponse Use to parse resposne from nameko service
 type RPCResponse struct {
-	Result map[string]interface{} `json:"result"`
-	Err    map[string]string      `json:"error"`
+	Result interface{}       `json:"result"`
+	Err    map[string]string `json:"error"`
 }
 
 func (e *RPCError) Error() string {
@@ -117,7 +117,7 @@ func (r *Client) Init() {
 	r.msgs = msgs
 }
 
-func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
+func (r *Client) publish(p RPCRequestParam) (interface{}, error) {
 	response := &RPCResponse{}
 	correlationID := uuid.NewV4().String()
 
@@ -157,10 +157,4 @@ func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
 func (r *Client) Call(p RPCRequestParam) (interface{}, error) {
 	response, err := r.publish(p)
 	return response, err
-}
-
-func FailOnError(err error, msg string) {
-	if err != nil {
-		log.Fatalf("%s: %s", msg, err)
-	}
 }
