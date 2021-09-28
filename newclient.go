@@ -1,4 +1,4 @@
-package gonamekoclient
+package main
 
 import (
 	"encoding/json"
@@ -29,7 +29,6 @@ type Client struct {
 	RabbitPass     string
 	RabbitPort     int64
 	ContentType    string
-	param          RPCPayload
 
 	conn    amqp.Connection
 	channel amqp.Channel
@@ -67,11 +66,11 @@ func (e *Error) Error() string {
 func (r *Client) Init() {
 	url := fmt.Sprintf("amqp://%v:%v@%v:%v/", r.RabbitUser, r.RabbitPass, r.RabbitHostname, r.RabbitPort)
 	conn, err := amqp.Dial(url)
-	failOnError(err, "Failed to connect to RabbitMQ")
+	FailOnError(err, "Failed to connect to RabbitMQ")
 	r.conn = *conn
 
 	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
+	FailOnError(err, "Failed to open a channel")
 	r.channel = *ch
 
 	err = ch.ExchangeDeclare(
@@ -83,7 +82,7 @@ func (r *Client) Init() {
 		false,        // no-wait
 		nil,          // arguments
 	)
-	failOnError(err, "Failed to declare an exchange")
+	FailOnError(err, "Failed to declare an exchange")
 
 	q, err := ch.QueueDeclare(
 		"go-nameko-client", // name
@@ -93,7 +92,7 @@ func (r *Client) Init() {
 		false,              // no-wait
 		nil,                // arguments
 	)
-	failOnError(err, "Failed to declare a queue")
+	FailOnError(err, "Failed to declare a queue")
 	r.queue = q
 
 	err = ch.QueueBind(
@@ -103,7 +102,7 @@ func (r *Client) Init() {
 		false,
 		nil,
 	)
-	failOnError(err, "Failed to bind a queue")
+	FailOnError(err, "Failed to bind a queue")
 
 	msgs, err := ch.Consume(
 		r.queue.Name, // queue
@@ -114,7 +113,7 @@ func (r *Client) Init() {
 		false,        // no wait
 		nil,          // args
 	)
-	failOnError(err, "Failed to register a consumer")
+	FailOnError(err, "Failed to register a consumer")
 	r.msgs = msgs
 }
 
@@ -136,7 +135,7 @@ func (r *Client) publish(p RPCRequestParam) (map[string]interface{}, error) {
 				ReplyTo:       r.queue.Name,
 				Body:          []byte(string(param)),
 			})
-		failOnError(err, "Failed to publish a message")
+		FailOnError(err, "Failed to publish a message")
 	}()
 
 	d := <-r.msgs
@@ -160,7 +159,7 @@ func (r *Client) Call(p RPCRequestParam) (interface{}, error) {
 	return response, err
 }
 
-func failOnError(err error, msg string) {
+func FailOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
 	}
