@@ -52,7 +52,7 @@ func (s *Server) Run() {
 		fmt.Sprintf("rpc-%v", s.Name), // name
 		false,                         // durable
 		false,                         // delete when unused
-		true,                          // exclusive
+		false,                         // exclusive
 		false,                         // no-wait
 		nil,                           // arguments
 	)
@@ -78,14 +78,44 @@ func (s *Server) Run() {
 	msgs, err := ch.Consume(
 		s.queue.Name, // queue
 		"",           // consumer
-		true,         // auto ack
+		false,        // auto ack
 		false,        // exclusive
 		false,        // no local
 		false,        // no wait
 		nil,          // args
 	)
 	FailOnError(err, "Failed to register a consumer")
-	s.msgs = msgs
+
+	forever := make(chan bool)
+
+	go func() {
+		for msg := range msgs {
+			fmt.Println(msg)
+			response, _ := json.Marshal(
+				RPCResponse{
+					Result: "hello, nameko!",
+					Err:    nil,
+				},
+			)
+
+			err := s.channel.Publish(
+				"nameko-rpc",
+				msg.ReplyTo,
+				false,
+				false,
+				amqp.Publishing{
+					ContentType:   "application/xjson",
+					CorrelationId: msg.CorrelationId,
+					Body:          response,
+				})
+			FailOnError(err, "Failed to publish a message")
+
+			msg.Ack(false)
+		}
+	}()
+
+	log.Printf(" [*] Server is waiting...")
+	<-forever
 }
 
 func FailOnError(err error, msg string) {
@@ -105,35 +135,4 @@ func main() {
 	}
 
 	server.Run()
-
-	forever := make(chan bool)
-
-	go func() {
-		for msg := range server.msgs {
-			fmt.Println(string(msg.Body))
-			response, _ := json.Marshal(
-				RPCResponse{
-					Result: "hello, nameko!",
-					Err:    nil,
-				},
-			)
-
-			err := server.channel.Publish(
-				"nameko-rpc",
-				msg.ReplyTo,
-				false,
-				false,
-				amqp.Publishing{
-					ContentType:   "application/xjson",
-					CorrelationId: msg.CorrelationId,
-					Body:          response,
-				})
-			FailOnError(err, "Failed to publish a message")
-
-			msg.Ack(false)
-		}
-	}()
-
-	log.Printf(" [*] Server is waiting...")
-	<-forever
 }
