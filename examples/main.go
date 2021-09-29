@@ -7,5 +7,8 @@ func main() {
 		Name: "gonameko",
 	}
 
+	server.Setup(
+		"localhost", "guest", "guest", 5672,
+	)
 	server.Run()
 }
