@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"reflect"
+	"strings"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
@@ -162,14 +164,15 @@ func (c *Connection) Call(p RPCRequestParam) (interface{}, error) {
 
 }
 
-func (c *Connection) Serve(name string) {
+func (c *Connection) Serve(s interface{}) {
+	instance := s.(*BaseService)
 	server, err := c.channel.QueueDeclare(
-		fmt.Sprintf("rpc-%v", name), // queue name
-		false,                       // durable
-		false,                       // delete when unused
-		true,                        // exclusive
-		false,                       // no-wait
-		nil,                         // arguments
+		fmt.Sprintf("rpc-%v", instance.GetName()), // queue name
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive
+		false, // no-wait
+		nil,   // arguments
 	)
 	FailOnError(err, "Failed to declare a server queue")
 	c.server = server
@@ -182,13 +185,13 @@ func (c *Connection) Serve(name string) {
 	FailOnError(err, "Failed to set server QoS")
 
 	err = c.channel.QueueBind(
-		name,                      // queue name
-		fmt.Sprintf("%v.*", name), // routing key
-		"nameko-rpc",              // exchange
-		false,                     // no-wait
-		nil,                       // args
+		fmt.Sprintf("rpc-%v", instance.GetName()), // queue name
+		fmt.Sprintf("%v.*", instance.GetName()),   // routing key
+		"nameko-rpc",                              // exchange
+		false,                                     // no-wait
+		nil,                                       // args
 	)
-	FailOnError(err, "Failed to bind a queue")
+	FailOnError(err, "Failed to bind a server queue")
 
 	msgs, err := c.channel.Consume(
 		c.server.Name, // queue name
@@ -206,13 +209,17 @@ func (c *Connection) Serve(name string) {
 	go func() {
 		for msg := range msgs {
 			log.Println("Server got rpc message: ", msg)
+
+			methodName := ToMethodName(strings.Split(msg.RoutingKey, ".")[1])
+			val := reflect.ValueOf(instance).MethodByName(methodName).Call([]reflect.Value{})
+			result := val[0].Interface().(map[string]string)
+
 			response, _ := json.Marshal(
 				RPCResponse{
-					Result: "hello, nameko!",
+					Result: result,
 					Err:    nil,
 				},
 			)
-
 			err := c.channel.Publish(
 				"nameko-rpc",
 				msg.ReplyTo,
