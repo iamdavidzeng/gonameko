@@ -2,20 +2,25 @@ package gonameko
 
 type Server struct {
 	Name string
+
+	RabbitHostname string
+	RabbitUser     string
+	RabbitPass     string
+	RabbitPort     int64
+	ContentType    string
+
 	Conn *Connection
 }
 
 func (s *Server) Run() {
-	s.Conn.Serve(s.Name)
-}
-
-func (s *Server) Setup(host, user, pass string, port int64) {
 	s.Conn = &Connection{
-		RabbitHostname: host,
-		RabbitUser:     user,
-		RabbitPass:     pass,
-		RabbitPort:     port,
-		ContentType:    "application/xjson",
+		Name:           s.Name,
+		RabbitHostname: s.RabbitHostname,
+		RabbitUser:     s.RabbitUser,
+		RabbitPass:     s.RabbitPass,
+		RabbitPort:     s.RabbitPort,
+		ContentType:    s.ContentType,
 	}
 	s.Conn.Declare()
+	s.Conn.Serve(s.Name)
 }

@@ -24,19 +24,16 @@ func main() {
 		RabbitPort:     5672,
 		ContentType:    "application/json",
 	}
+	client.Setup()
 
-	client.Init()
-
-	response, err := client.Call(
-		gonameko.RPCRequestParam{
-			Service:  "articles",
-			Function: "health_check",
-			Payload: gonameko.RPCPayload{
-				Args:   []string{},
-				Kwargs: map[string]string{},
-			},
+	response, err := client.Call(gonameko.RPCRequestParam{
+		Service:  "locations",
+		Function: "health_check",
+		Payload: gonameko.RPCPayload{
+			Args:   []string{},
+			Kwargs: map[string]string{},
 		},
-	)
+	})
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -60,7 +57,6 @@ func main() {
 		RabbitPort:     5672,
 		ContentType:    "application/json",
 	}
-
 	server.Run()
 }
 ```

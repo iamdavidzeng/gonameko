@@ -10,6 +10,7 @@ import (
 )
 
 type Connection struct {
+	Name           string
 	RabbitHostname string
 	RabbitUser     string
 	RabbitPass     string
@@ -18,7 +19,7 @@ type Connection struct {
 
 	conn    *amqp.Connection
 	channel *amqp.Channel
-	client  amqp.Queue
+	queue   amqp.Queue
 	server  amqp.Queue
 	msgs    <-chan amqp.Delivery
 }
@@ -89,20 +90,20 @@ func (c *Connection) Declare() {
 	)
 	FailOnError(err, "Failed to declare an exchange")
 
-	client, err := ch.QueueDeclare(
-		"gonameko-client", // name
-		false,             // durable
-		false,             // delete when unused
-		false,             // exclusive
-		false,             // no-wait
-		nil,               // arguments
+	q, err := ch.QueueDeclare(
+		fmt.Sprintf("rpc.reply-%v-%v", c.Name, uuid.NewV4().String()), // name
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive
+		false, // no-wait
+		nil,   // arguments
 	)
 	FailOnError(err, "Failed to declare a client queue")
-	c.client = client
+	c.queue = q
 
 	err = ch.QueueBind(
-		client.Name,  // name
-		client.Name,  // routing key
+		q.Name,       // name
+		q.Name,       // routing key
 		"nameko-rpc", // exchange name
 		false,        // no-wait
 		nil,          // args
@@ -110,13 +111,13 @@ func (c *Connection) Declare() {
 	FailOnError(err, "Failed to bind a client queue")
 
 	msgs, err := ch.Consume(
-		c.client.Name, // queue
-		"",            // consumer
-		false,         // auto ack
-		false,         // exclusive
-		false,         // no local
-		false,         // no wait
-		nil,           // args
+		c.queue.Name, // queue
+		"",           // consumer
+		false,        // auto ack
+		true,         // exclusive
+		false,        // no local
+		false,        // no wait
+		nil,          // args
 	)
 	FailOnError(err, "Failed to register a consumer")
 	c.msgs = msgs
@@ -137,7 +138,7 @@ func (c *Connection) Call(p RPCRequestParam) (interface{}, error) {
 			amqp.Publishing{
 				ContentType:   c.ContentType,
 				CorrelationId: correlationID,
-				ReplyTo:       c.client.Name,
+				ReplyTo:       c.queue.Name,
 				Body:          []byte(string(param)),
 			})
 		FailOnError(err, "Failed to publish a message")
@@ -150,11 +151,11 @@ func (c *Connection) Call(p RPCRequestParam) (interface{}, error) {
 		log.Println(response)
 
 		if response.Err != nil {
+			d.Ack(false)
 			return nil, &RPCError{response.Err["exc_path"], response.Err["exc_args"], response.Err["exc_type"], response.Err["value"]}
 		}
 
 		d.Ack(false)
-
 		return response.Result, nil
 	}
 	return nil, &Error{"INVALID_CORRELATION_ID", "invalid correlation id"}
@@ -166,7 +167,7 @@ func (c *Connection) Serve(name string) {
 		fmt.Sprintf("rpc-%v", name), // queue name
 		false,                       // durable
 		false,                       // delete when unused
-		false,                       // exclusive
+		true,                        // exclusive
 		false,                       // no-wait
 		nil,                         // arguments
 	)
@@ -193,7 +194,7 @@ func (c *Connection) Serve(name string) {
 		c.server.Name, // queue name
 		"",            // consumer
 		false,         // auto ack
-		false,         // exclusive
+		true,          // exclusive
 		false,         // no local
 		false,         // no wait
 		nil,           // args
@@ -204,7 +205,7 @@ func (c *Connection) Serve(name string) {
 
 	go func() {
 		for msg := range msgs {
-			fmt.Println(msg)
+			log.Println("Server got rpc message: ", msg)
 			response, _ := json.Marshal(
 				RPCResponse{
 					Result: "hello, nameko!",

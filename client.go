@@ -2,6 +2,12 @@ package gonameko
 
 // Client use to initiate a go nameko client
 type Client struct {
+	RabbitHostname string
+	RabbitUser     string
+	RabbitPass     string
+	RabbitPort     int64
+	ContentType    string
+
 	Conn *Connection
 }
 
@@ -11,13 +17,14 @@ func (c *Client) Call(p RPCRequestParam) (interface{}, error) {
 	return response, err
 }
 
-func (c *Client) Setup(host, user, pass string, port int64) {
+func (c *Client) Setup() {
 	c.Conn = &Connection{
-		RabbitHostname: host,
-		RabbitUser:     user,
-		RabbitPass:     pass,
-		RabbitPort:     port,
-		ContentType:    "application/xjson",
+		Name:           "gonameko-client",
+		RabbitHostname: c.RabbitHostname,
+		RabbitUser:     c.RabbitUser,
+		RabbitPass:     c.RabbitPass,
+		RabbitPort:     c.RabbitPort,
+		ContentType:    c.ContentType,
 	}
 	c.Conn.Declare()
 }
