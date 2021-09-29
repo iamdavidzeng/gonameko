@@ -9,7 +9,8 @@ type Server struct {
 	RabbitPort     int64
 	ContentType    string
 
-	Conn *Connection
+	Conn    *Connection
+	Service interface{}
 }
 
 func (s *Server) Run() {
@@ -22,5 +23,5 @@ func (s *Server) Run() {
 		ContentType:    s.ContentType,
 	}
 	s.Conn.Declare()
-	s.Conn.Serve(s.Name)
+	s.Conn.Serve(s.Service)
 }

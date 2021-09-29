@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"reflect"
+	"strings"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
@@ -26,14 +28,14 @@ type Connection struct {
 
 // RPCError capture exception from nameko service
 type RPCError struct {
-	ExcArgs string `json:"exc_args"`
-	ExcPath string `json:"exc_path"`
-	ExcType string `json:"exc_type"`
-	Value   string `json:"value"`
+	ExcArgs string `json:"exc_args,omitempty"`
+	ExcPath string `json:"exc_path,omitempty"`
+	ExcType string `json:"exc_type,omitempty"`
+	Value   string `json:"value,omitempty"`
 }
 
-// Error represent gonamekoclient customize error
-type Error struct {
+// Error represent gonameko customize error
+type CustomError struct {
 	Type, Value string
 }
 
@@ -49,17 +51,17 @@ type RPCRequestParam struct {
 	Payload           RPCPayload
 }
 
-// RPCResponse Use to parse resposne from nameko service
+// RPCResponse is used to parse response from nameko service
 type RPCResponse struct {
-	Result interface{}       `json:"result"`
-	Err    map[string]string `json:"error"`
+	Result interface{} `json:"result"`
+	Err    RPCError    `json:"error,omitempty"`
 }
 
 func (e *RPCError) Error() string {
 	return fmt.Sprintf("%v: %v", e.ExcType, e.Value)
 }
 
-func (e *Error) Error() string {
+func (e *CustomError) Error() string {
 	return fmt.Sprintf("%v: %v", e.Type, e.Value)
 }
 
@@ -147,29 +149,31 @@ func (c *Connection) Call(p RPCRequestParam) (interface{}, error) {
 	d := <-c.msgs
 	if d.CorrelationId == correlationID {
 		json.Unmarshal(d.Body, response)
+		serializedResponse, _ := json.Marshal(response)
 
-		log.Println(response)
+		log.Println("Got remote response:", string(serializedResponse))
 
-		if response.Err != nil {
+		if (response.Err != RPCError{}) {
 			d.Ack(false)
-			return nil, &RPCError{response.Err["exc_path"], response.Err["exc_args"], response.Err["exc_type"], response.Err["value"]}
+			return nil, &RPCError{response.Err.ExcPath, response.Err.ExcArgs, response.Err.ExcType, response.Err.Value}
 		}
 
 		d.Ack(false)
 		return response.Result, nil
 	}
-	return nil, &Error{"INVALID_CORRELATION_ID", "invalid correlation id"}
+	return nil, &CustomError{"INVALID_CORRELATION_ID", "invalid correlation id"}
 
 }
 
-func (c *Connection) Serve(name string) {
+func (c *Connection) Serve(s interface{}) {
+	instance := s.(*Service)
 	server, err := c.channel.QueueDeclare(
-		fmt.Sprintf("rpc-%v", name), // queue name
-		false,                       // durable
-		false,                       // delete when unused
-		true,                        // exclusive
-		false,                       // no-wait
-		nil,                         // arguments
+		fmt.Sprintf("rpc-%v", instance.GetName()), // queue name
+		false, // durable
+		false, // delete when unused
+		true,  // exclusive
+		false, // no-wait
+		nil,   // arguments
 	)
 	FailOnError(err, "Failed to declare a server queue")
 	c.server = server
@@ -182,13 +186,13 @@ func (c *Connection) Serve(name string) {
 	FailOnError(err, "Failed to set server QoS")
 
 	err = c.channel.QueueBind(
-		name,                      // queue name
-		fmt.Sprintf("%v.*", name), // routing key
-		"nameko-rpc",              // exchange
-		false,                     // no-wait
-		nil,                       // args
+		fmt.Sprintf("rpc-%v", instance.GetName()), // queue name
+		fmt.Sprintf("%v.*", instance.GetName()),   // routing key
+		"nameko-rpc",                              // exchange
+		false,                                     // no-wait
+		nil,                                       // args
 	)
-	FailOnError(err, "Failed to bind a queue")
+	FailOnError(err, "Failed to bind a server queue")
 
 	msgs, err := c.channel.Consume(
 		c.server.Name, // queue name
@@ -206,14 +210,24 @@ func (c *Connection) Serve(name string) {
 	go func() {
 		for msg := range msgs {
 			log.Println("Server got rpc message: ", msg)
+
+			methodName := ToMethodName(strings.Split(msg.RoutingKey, ".")[1])
+			res := reflect.ValueOf(instance).MethodByName(methodName).Call([]reflect.Value{})
+
+			var rpcError RPCError
+			val := res[0]
+			if len(res) > 1 && res[1].Interface() != nil {
+				rpcError = res[1].Interface().(RPCError)
+			}
 			response, _ := json.Marshal(
 				RPCResponse{
-					Result: "hello, nameko!",
-					Err:    nil,
+					Result: val.Interface(),
+					Err:    rpcError,
 				},
 			)
 
-			err := c.channel.Publish(
+			log.Println("Server response to", msg.ReplyTo, string(response))
+			err = c.channel.Publish(
 				"nameko-rpc",
 				msg.ReplyTo,
 				false,

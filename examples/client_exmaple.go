@@ -29,14 +29,4 @@ func main() {
 	} else {
 		fmt.Println(response)
 	}
-
-	server := gonameko.Server{
-		Name:           "gonameko",
-		RabbitHostname: "localhost",
-		RabbitUser:     "guest",
-		RabbitPass:     "guest",
-		RabbitPort:     5672,
-		ContentType:    "application/json",
-	}
-	server.Run()
 }
