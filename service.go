@@ -13,8 +13,6 @@ func (bs *BaseService) GetName() string {
 	return bs.Name
 }
 
-func (bs *BaseService) HealthCheck() map[string]string {
-	return map[string]string{
-		"git_sha": "dev",
-	}
+func (bs *BaseService) HealthCheck() (map[string]string, error) {
+	return map[string]string{"git_sha": "dev"}, nil
 }
