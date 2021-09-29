@@ -5,7 +5,7 @@ import (
 )
 
 func main() {
-	service := &gonameko.BaseService{
+	service := &gonameko.Service{
 		Name: "gonameko",
 	}
 

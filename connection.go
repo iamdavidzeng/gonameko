@@ -51,7 +51,7 @@ type RPCRequestParam struct {
 	Payload           RPCPayload
 }
 
-// RPCResponse Use to parse resposne from nameko service
+// RPCResponse is used to parse response from nameko service
 type RPCResponse struct {
 	Result interface{} `json:"result"`
 	Err    RPCError    `json:"error,omitempty"`
@@ -166,7 +166,7 @@ func (c *Connection) Call(p RPCRequestParam) (interface{}, error) {
 }
 
 func (c *Connection) Serve(s interface{}) {
-	instance := s.(*BaseService)
+	instance := s.(*Service)
 	server, err := c.channel.QueueDeclare(
 		fmt.Sprintf("rpc-%v", instance.GetName()), // queue name
 		false, // durable
