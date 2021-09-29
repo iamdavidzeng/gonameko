@@ -1,13 +1,3 @@
-# gonameko
-A Golang implementation of Nameko
-
-## Usage
-```
-go get -u github.com/iamdavidzeng/gonameko
-```
-
-client pattern
-```
 package main
 
 import (
@@ -39,16 +29,7 @@ func main() {
 	} else {
 		fmt.Println(response)
 	}
-}
-```
 
-server pattern
-```
-package main
-
-import "github.com/iamdavidzeng/gonameko"
-
-func main() {
 	server := gonameko.Server{
 		Name:           "gonameko",
 		RabbitHostname: "localhost",
@@ -59,4 +40,3 @@ func main() {
 	}
 	server.Run()
 }
-```
